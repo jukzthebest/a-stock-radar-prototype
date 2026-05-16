@@ -53,7 +53,7 @@ const milestones = [
 
 function App() {
   const [active, setActive] = useState('overview');
-  const [apiState, setApiState] = useState({ loading: true, health: null, candidates: [], error: null });
+  const [apiState, setApiState] = useState({ loading: true, health: null, candidates: [], snapshot: [], error: null });
   const current = useMemo(() => pages.find((p) => p.id === active) ?? pages[0], [active]);
   const Icon = current.icon;
 
@@ -61,21 +61,29 @@ function App() {
     const controller = new AbortController();
     async function loadAkshareStatus() {
       try {
-        const [healthRes, candidatesRes] = await Promise.all([
+        const [healthRes, snapshotRes] = await Promise.all([
           fetch('/api/health', { signal: controller.signal }),
-          fetch('/api/candidates/today?scan_limit=20&limit=5', { signal: controller.signal }),
+          fetch('/api/market/snapshot?limit=8&refresh=false', { signal: controller.signal }),
         ]);
         if (!healthRes.ok) throw new Error(`health ${healthRes.status}`);
         const health = await healthRes.json();
-        let candidates = [];
-        if (candidatesRes.ok) {
-          const candidatePayload = await candidatesRes.json();
-          candidates = candidatePayload.items ?? [];
-        }
-        setApiState({ loading: false, health, candidates, error: null });
+        const snapshotPayload = snapshotRes.ok ? await snapshotRes.json() : { items: [] };
+        setApiState({ loading: false, health, candidates: [], snapshot: snapshotPayload.items ?? [], error: null });
+
+        // 候选池计算会逐只拉 K 线，免费源下可能较慢；不要阻塞页面行情展示。
+        fetch('/api/candidates/today?scan_limit=10&limit=5', { signal: controller.signal })
+          .then((res) => (res.ok ? res.json() : { items: [] }))
+          .then((candidatePayload) => {
+            setApiState((prev) => ({ ...prev, candidates: candidatePayload.items ?? [] }));
+          })
+          .catch((error) => {
+            if (error.name !== 'AbortError') {
+              setApiState((prev) => ({ ...prev, error: `候选池计算失败：${error.message}` }));
+            }
+          });
       } catch (error) {
         if (error.name !== 'AbortError') {
-          setApiState({ loading: false, health: null, candidates: [], error: error.message });
+          setApiState({ loading: false, health: null, candidates: [], snapshot: [], error: error.message });
         }
       }
     }
@@ -182,16 +190,32 @@ function App() {
               </div>
             </div>
             <div className="candidate-preview">
-              {(apiState.candidates.length ? apiState.candidates : [
-                { code: '000000', name: '等待后端数据', score: '-', price: '-', technical: { status: 'backend_offline' } },
+              <div className="section-label">行情快照 / AKShare API</div>
+              {(apiState.snapshot.length ? apiState.snapshot : [
+                { code: '------', name: apiState.loading ? '行情加载中' : '暂无行情数据', price: '-', pct_chg: '-', amount: '-' },
               ]).map((item) => (
-                <div className="candidate-row" key={item.code}>
+                <div className="candidate-row" key={`snapshot-${item.code}`}>
+                  <strong>{item.name} <span>{item.code}</span></strong>
+                  <em>{item.pct_chg === '-' || item.pct_chg == null ? '涨跌幅 -' : `${Number(item.pct_chg).toFixed(2)}%`}</em>
+                  <b>{item.price === '-' || item.price == null ? '价格 -' : `¥${Number(item.price).toFixed(2)}`}</b>
+                  <span>{item.amount === '-' || item.amount == null ? '成交额 -' : `成交额 ${(Number(item.amount) / 1e8).toFixed(1)}亿`}</span>
+                </div>
+              ))}
+            </div>
+            <div className="candidate-preview">
+              <div className="section-label">策略候选池 / 严格条件命中</div>
+              {apiState.candidates.length ? apiState.candidates.map((item) => (
+                <div className="candidate-row" key={`candidate-${item.code}`}>
                   <strong>{item.name} <span>{item.code}</span></strong>
                   <em>{item.technical?.status ?? 'watching'}</em>
                   <b>评分 {item.score}</b>
                   <span>{item.price === '-' ? '价格 -' : `价格 ${Number(item.price).toFixed(2)}`}</span>
                 </div>
-              ))}
+              )) : (
+                <div className="empty-state">
+                  {apiState.loading ? '正在计算候选股...' : '当前严格策略暂无命中；这不等于 API 没接入，行情快照已在上方显示。'}
+                </div>
+              )}
             </div>
           </div>
 
