@@ -21,16 +21,20 @@ import {
 } from 'lucide-react';
 import './styles.css';
 
+const assetPath = (path) => `${import.meta.env.BASE_URL}${path.replace(/^\//, '')}`;
+const apiBase = window.location.hostname.endsWith('github.io') ? 'http://127.0.0.1:8000' : '';
+const apiUrl = (path) => `${apiBase}${path}`;
+
 const pages = [
-  { id: 'overview', title: '总览仪表盘', subtitle: '实时扫描、候选池、买卖点与通知预览', img: '/prototypes/overview.png', icon: LayoutDashboard },
-  { id: 'strategy', title: '策略配置', subtitle: '规则参数、权重、政策主题库', img: '/prototypes/strategy.png', icon: SlidersHorizontal },
-  { id: 'candidates', title: '候选股池', subtitle: '评分、突破位、止损位、观察状态', img: '/prototypes/candidates.png', icon: Table2 },
-  { id: 'stock-detail', title: '个股详情 / 买卖点', subtitle: 'K线、涨停整理、突破、止损止盈', img: '/prototypes/stock-detail.png', icon: LineChart },
-  { id: 'alerts', title: '实时预警 / 通知中心', subtitle: '盘中触发、通知模板、发送日志', img: '/prototypes/alerts.png', icon: Bell },
-  { id: 'risk', title: '风控排雷', subtitle: 'ST、减持、质押、违规、公告风险', img: '/prototypes/risk.png', icon: ShieldAlert },
-  { id: 'backtest', title: '回测复盘', subtitle: '胜率、盈亏比、回撤、参数敏感性', img: '/prototypes/backtest.png', icon: Gauge },
-  { id: 'data-sources', title: '数据源设置', subtitle: 'AKShare、Tushare、通知通道、调度', img: '/prototypes/data-sources.png', icon: Database },
-  { id: 'mobile-alert', title: '移动端通知详情', subtitle: '微信 / 企业微信收到信号后的详情页', img: '/prototypes/mobile-alert.png', icon: Smartphone },
+  { id: 'overview', title: '总览仪表盘', subtitle: '实时扫描、候选池、买卖点与通知预览', img: assetPath('/prototypes/overview.png'), icon: LayoutDashboard },
+  { id: 'strategy', title: '策略配置', subtitle: '规则参数、权重、政策主题库', img: assetPath('/prototypes/strategy.png'), icon: SlidersHorizontal },
+  { id: 'candidates', title: '候选股池', subtitle: '评分、突破位、止损位、观察状态', img: assetPath('/prototypes/candidates.png'), icon: Table2 },
+  { id: 'stock-detail', title: '个股详情 / 买卖点', subtitle: 'K线、涨停整理、突破、止损止盈', img: assetPath('/prototypes/stock-detail.png'), icon: LineChart },
+  { id: 'alerts', title: '实时预警 / 通知中心', subtitle: '盘中触发、通知模板、发送日志', img: assetPath('/prototypes/alerts.png'), icon: Bell },
+  { id: 'risk', title: '风控排雷', subtitle: 'ST、减持、质押、违规、公告风险', img: assetPath('/prototypes/risk.png'), icon: ShieldAlert },
+  { id: 'backtest', title: '回测复盘', subtitle: '胜率、盈亏比、回撤、参数敏感性', img: assetPath('/prototypes/backtest.png'), icon: Gauge },
+  { id: 'data-sources', title: '数据源设置', subtitle: 'AKShare、Tushare、通知通道、调度', img: assetPath('/prototypes/data-sources.png'), icon: Database },
+  { id: 'mobile-alert', title: '移动端通知详情', subtitle: '微信 / 企业微信收到信号后的详情页', img: assetPath('/prototypes/mobile-alert.png'), icon: Smartphone },
 ];
 
 const akshareMatrix = [
@@ -62,8 +66,8 @@ function App() {
     async function loadAkshareStatus() {
       try {
         const [healthRes, snapshotRes] = await Promise.all([
-          fetch('/api/health', { signal: controller.signal }),
-          fetch('/api/market/snapshot?limit=8&refresh=false', { signal: controller.signal }),
+          fetch(apiUrl('/api/health'), { signal: controller.signal }),
+          fetch(apiUrl('/api/market/snapshot?limit=8&refresh=false'), { signal: controller.signal }),
         ]);
         if (!healthRes.ok) throw new Error(`health ${healthRes.status}`);
         const health = await healthRes.json();
@@ -71,7 +75,7 @@ function App() {
         setApiState({ loading: false, health, candidates: [], snapshot: snapshotPayload.items ?? [], error: null });
 
         // 候选池计算会逐只拉 K 线，免费源下可能较慢；不要阻塞页面行情展示。
-        fetch('/api/candidates/today?scan_limit=10&limit=5', { signal: controller.signal })
+        fetch(apiUrl('/api/candidates/today?scan_limit=10&limit=5'), { signal: controller.signal })
           .then((res) => (res.ok ? res.json() : { items: [] }))
           .then((candidatePayload) => {
             setApiState((prev) => ({ ...prev, candidates: candidatePayload.items ?? [] }));
@@ -180,7 +184,7 @@ function App() {
         <section className="content-grid">
           <div className="matrix-card">
             <h2>AKShare 实时接入状态</h2>
-            <p className="muted">前端会请求本地 FastAPI：<code>/api/health</code> 与 <code>/api/candidates/today</code>。GitHub Pages 静态部署时后端不可用，本地启动后显示真实数据。</p>
+            <p className="muted">本地开发通过 Vite 代理请求 <code>/api</code>；GitHub Pages 会直接请求你电脑上的 <code>http://127.0.0.1:8000</code>。因此必须先在本机启动 FastAPI 后端。</p>
             <div className="api-status-card">
               <div className={`badge ${apiState.health?.ok ? 'green' : apiState.loading ? 'blue' : 'yellow'}`}>
                 {apiState.loading ? '检测中' : apiState.health?.ok ? 'AKShare 可用' : '后端未连接'}

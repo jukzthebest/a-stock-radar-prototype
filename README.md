@@ -34,7 +34,7 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
 
-前端开发服务器已在 `vite.config.js` 中将 `/api` 代理到 `http://127.0.0.1:8000`。
+前端开发服务器已在 `vite.config.js` 中将 `/api` 代理到 `http://127.0.0.1:8000`。GitHub Pages 静态页没有内置后端，生产构建会请求浏览器本机的 `http://127.0.0.1:8000`；打开 Pages 前必须先在同一台电脑启动 FastAPI。
 
 ## AKShare API
 
