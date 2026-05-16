@@ -17,10 +17,36 @@
 
 ## 本地运行
 
+前端：
+
 ```bash
 npm install
 npm run dev
 ```
+
+AKShare 后端：
+
+```bash
+cd backend
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000
+```
+
+前端开发服务器已在 `vite.config.js` 中将 `/api` 代理到 `http://127.0.0.1:8000`。
+
+## AKShare API
+
+- `GET /api/health`
+- `GET /api/market/snapshot?limit=50&refresh=true`
+- `GET /api/stocks/{code}/history?days=280`
+- `GET /api/stocks/{code}/signal`
+- `GET /api/limit-up-pool`
+- `GET /api/candidates/today?scan_limit=120&limit=30`
+- `GET /api/strategy/config`
+
+说明：AKShare 免费数据源无 SLA。当前后端对东方财富接口失败做了新浪行情/历史数据 fallback，但 fallback 缺少流通市值、换手率等字段，候选结果会标记风险。
 
 ## 构建
 

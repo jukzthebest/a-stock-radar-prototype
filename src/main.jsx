@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   Activity,
@@ -46,15 +46,42 @@ const akshareMatrix = [
 const milestones = [
   { name: '产品方案', status: 'done', note: '选股、买卖点、风控、通知、回测框架已定义' },
   { name: '静态高保真图', status: 'done', note: '总览 + 8 个核心子页面已生成' },
-  { name: '可交互 Web 原型', status: 'doing', note: '当前仓库版本：页面导航、图稿展示、数据边界说明' },
-  { name: 'AKShare 数据服务', status: 'todo', note: '下一阶段接 FastAPI + AKShare' },
-  { name: '实盘通知', status: 'todo', note: '企业微信 + 短信，只推关键触发' },
+  { name: '可交互 Web 原型', status: 'done', note: '页面导航、图稿展示、数据边界说明' },
+  { name: 'AKShare 数据服务', status: 'doing', note: 'FastAPI 已接入行情、K线、涨停池、候选股接口' },
+  { name: '实盘通知', status: 'todo', note: '下一步接企业微信 + 短信，只推关键触发' },
 ];
 
 function App() {
   const [active, setActive] = useState('overview');
+  const [apiState, setApiState] = useState({ loading: true, health: null, candidates: [], error: null });
   const current = useMemo(() => pages.find((p) => p.id === active) ?? pages[0], [active]);
   const Icon = current.icon;
+
+  useEffect(() => {
+    const controller = new AbortController();
+    async function loadAkshareStatus() {
+      try {
+        const [healthRes, candidatesRes] = await Promise.all([
+          fetch('/api/health', { signal: controller.signal }),
+          fetch('/api/candidates/today?scan_limit=20&limit=5', { signal: controller.signal }),
+        ]);
+        if (!healthRes.ok) throw new Error(`health ${healthRes.status}`);
+        const health = await healthRes.json();
+        let candidates = [];
+        if (candidatesRes.ok) {
+          const candidatePayload = await candidatesRes.json();
+          candidates = candidatePayload.items ?? [];
+        }
+        setApiState({ loading: false, health, candidates, error: null });
+      } catch (error) {
+        if (error.name !== 'AbortError') {
+          setApiState({ loading: false, health: null, candidates: [], error: error.message });
+        }
+      }
+    }
+    loadAkshareStatus();
+    return () => controller.abort();
+  }, []);
 
   return (
     <div className="app-shell">
@@ -140,6 +167,43 @@ function App() {
               </ul>
             </div>
           </aside>
+        </section>
+
+        <section className="content-grid">
+          <div className="matrix-card">
+            <h2>AKShare 实时接入状态</h2>
+            <p className="muted">前端会请求本地 FastAPI：<code>/api/health</code> 与 <code>/api/candidates/today</code>。GitHub Pages 静态部署时后端不可用，本地启动后显示真实数据。</p>
+            <div className="api-status-card">
+              <div className={`badge ${apiState.health?.ok ? 'green' : apiState.loading ? 'blue' : 'yellow'}`}>
+                {apiState.loading ? '检测中' : apiState.health?.ok ? 'AKShare 可用' : '后端未连接'}
+              </div>
+              <div className="note">
+                {apiState.health?.time ? `后端时间：${apiState.health.time}` : apiState.error ? `状态：${apiState.error}` : '本地启动 backend 后可获取实时行情和候选股。'}
+              </div>
+            </div>
+            <div className="candidate-preview">
+              {(apiState.candidates.length ? apiState.candidates : [
+                { code: '000000', name: '等待后端数据', score: '-', price: '-', technical: { status: 'backend_offline' } },
+              ]).map((item) => (
+                <div className="candidate-row" key={item.code}>
+                  <strong>{item.name} <span>{item.code}</span></strong>
+                  <em>{item.technical?.status ?? 'watching'}</em>
+                  <b>评分 {item.score}</b>
+                  <span>{item.price === '-' ? '价格 -' : `价格 ${Number(item.price).toFixed(2)}`}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="matrix-card narrow">
+            <h2>本地启动方式</h2>
+            <ol className="ordered">
+              <li><code>cd backend && python -m venv .venv</code></li>
+              <li><code>source .venv/bin/activate && pip install -r requirements.txt</code></li>
+              <li><code>uvicorn app.main:app --reload --port 8000</code></li>
+              <li><code>npm run dev</code></li>
+            </ol>
+          </div>
         </section>
 
         <section className="content-grid">
